@@ -12,6 +12,7 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor
 from src.ui.pink_theme import ThemeMode, get_pink_theme_stylesheet
 from src.ui.widgets import PlayButton, HeaderLabel, SubHeaderLabel, CustomButton
 from src.launcher.versions import VersionManager, VersionType
+from src.launcher.game_handler import GameProcess
 from src.auth.login import AuthManager
 from src.utils.system_info import SystemInfo, JavaFinder
 from src.utils.config import config
@@ -30,6 +31,7 @@ class MEXOClient(QMainWindow):
         # Core-Module
         self.version_manager = VersionManager()
         self.auth_manager = AuthManager()
+        self.game_process = GameProcess()
         self.current_theme = ThemeMode.DARK
         self.selected_ram = 4
         self.selected_java_path = JavaFinder.find_java()
@@ -369,7 +371,7 @@ class MEXOClient(QMainWindow):
         logger.debug(f"RAM eingestellt: {value}GB")
     
     def on_play_clicked(self):
-        """Play-Button geklickt"""
+        """Play-Button geklickt - STARTET ECHTES MINECRAFT"""
         selected_version = self.version_manager.get_selected_version()
         
         if not selected_version:
@@ -380,17 +382,40 @@ class MEXOClient(QMainWindow):
             QMessageBox.critical(self, "Fehler", "Java nicht gefunden. Bitte installiere Java 8+.")
             return
         
-        # Login
+        # Spieler-Login
         user = self.auth_manager.login_offline("MEXO-Player")
         
-        QMessageBox.information(
-            self,
-            "Spiel wird gestartet",
-            f"Starte {selected_version.name}\nSpieler: {user.username}\nRAM: {self.selected_ram}GB"
+        logger.info(f"🎮 Minecraft wird gestartet...")
+        logger.info(f"👤 Spieler: {user.username}")
+        logger.info(f"📦 Version: {selected_version.version}")
+        logger.info(f"💾 RAM: {self.selected_ram}GB")
+        
+        # Starte echtes Minecraft
+        success = self.game_process.start_game(
+            version=selected_version,
+            user=user,
+            java_path=self.selected_java_path,
+            ram_gb=self.selected_ram
         )
         
-        logger.info(f"🎮 Spielstart: {selected_version.name}")
-        self.log_display.append(f"[START] Spiel wird gestartet: {selected_version.name}\n")
+        if success:
+            self.log_display.append(
+                f"✅ [START] Minecraft {selected_version.version} wird gestartet...\n"
+                f"👤 Spieler: {user.username}\n"
+                f"💾 RAM: {self.selected_ram}GB\n"
+                f"☕ Java: {self.selected_java_path}\n"
+                f"⏱️ Zeit: {__import__('datetime').datetime.now().strftime('%H:%M:%S')}\n"
+            )
+            QMessageBox.information(
+                self,
+                "✅ Minecraft wird gestartet",
+                f"Starte {selected_version.name}\nSpieler: {user.username}\nRAM: {self.selected_ram}GB\n\nMinecraft öffnet sich in Kürze..."
+            )
+        else:
+            self.log_display.append(
+                f"❌ [FEHLER] Minecraft konnte nicht gestartet werden!\n"
+            )
+            QMessageBox.critical(self, "Fehler", "Minecraft konnte nicht gestartet werden. Prüfe die Logs.")
     
     def on_save_settings(self):
         """Speichert die Einstellungen"""
