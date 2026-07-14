@@ -1,0 +1,27 @@
+{
+  "game": {
+    "ram_min": 2,
+    "ram_max": 8,
+    "ram_default": 4,
+    "version": "latest",
+    "game_dir": ".minecraft"
+  },
+  "ui": {
+    "theme": "dark",
+    "language": "de",
+    "window_width": 1000,
+    "window_height": 700,
+    "animations_enabled": true
+  },
+  "auth": {
+    "mode": "offline",
+    "username": "Player",
+    "save_credentials": false
+  },
+  "features": {
+    "discord_rpc": true,
+    "auto_update": true,
+    "shader_manager": true,
+    "mod_manager": true
+  }
+}
