@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QGridLayout, QTextEdit, QLineEdit, QFileDialog, QMessageBox,
     QListWidget, QListWidgetItem, QProgressBar
 )
-from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QThread
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor
 
 from src.ui.pink_theme import ThemeMode, get_pink_theme_stylesheet
@@ -17,6 +17,36 @@ from src.auth.login import AuthManager
 from src.utils.system_info import SystemInfo, JavaFinder
 from src.utils.config import config
 from src.utils.logger import logger
+
+
+class VersionDownloadWorker(QThread):
+    """Worker Thread für Version Download"""
+    
+    progress = pyqtSignal(str)  # Status-Meldung
+    finished = pyqtSignal(bool)  # True = Erfolg, False = Fehler
+    
+    def __init__(self, version_manager, version):
+        super().__init__()
+        self.version_manager = version_manager
+        self.version = version
+    
+    def run(self):
+        """Lädt Version in separatem Thread"""
+        try:
+            self.progress.emit(f"📥 Lade {self.version.name} herunter...")
+            
+            success = self.version_manager.ensure_version_downloaded(self.version)
+            
+            if success:
+                self.progress.emit(f"✅ {self.version.name} bereit!")
+                self.finished.emit(True)
+            else:
+                self.progress.emit(f"❌ Download fehlgeschlagen!")
+                self.finished.emit(False)
+        
+        except Exception as e:
+            self.progress.emit(f"❌ Fehler: {e}")
+            self.finished.emit(False)
 
 
 class MEXOClient(QMainWindow):
@@ -35,6 +65,9 @@ class MEXOClient(QMainWindow):
         self.current_theme = ThemeMode.DARK
         self.selected_ram = 4
         self.selected_java_path = JavaFinder.find_java()
+        
+        # Download Worker
+        self.download_worker = None
         
         # UI erstellen
         self.setup_ui()
@@ -158,8 +191,9 @@ class MEXOClient(QMainWindow):
         self.version_list.itemClicked.connect(self.on_version_selected)
         
         for version in self.version_manager.get_all_versions():
+            status = "✅" if version.downloaded else "📥"
             item = QListWidgetItem(
-                f"{version.name} ({version.type.value}) - Java {version.java_version}"
+                f"{status} {version.name} ({version.type.value}) - Java {version.java_version}"
             )
             item.setData(Qt.ItemDataRole.UserRole, version)
             self.version_list.addItem(item)
@@ -371,7 +405,7 @@ class MEXOClient(QMainWindow):
         logger.debug(f"RAM eingestellt: {value}GB")
     
     def on_play_clicked(self):
-        """Play-Button geklickt - STARTET ECHTES MINECRAFT"""
+        """Play-Button geklickt - STARTET MINECRAFT MIT AUTO-DOWNLOAD"""
         selected_version = self.version_manager.get_selected_version()
         
         if not selected_version:
@@ -382,6 +416,35 @@ class MEXOClient(QMainWindow):
             QMessageBox.critical(self, "Fehler", "Java nicht gefunden. Bitte installiere Java 8+.")
             return
         
+        # Wenn Version nicht heruntergeladen: Download starten
+        if not selected_version.downloaded:
+            logger.info(f"📥 Version {selected_version.name} nicht vorhanden - Download startet...")
+            self.log_display.append(f"📥 Lade {selected_version.name} herunter...\n")
+            
+            # Starte Download in separatem Thread
+            self.download_worker = VersionDownloadWorker(self.version_manager, selected_version)
+            self.download_worker.progress.connect(self.log_display.append)
+            self.download_worker.finished.connect(lambda success: self._on_download_finished(success, selected_version))
+            self.download_worker.start()
+            
+            self.play_button.setEnabled(False)
+            return
+        
+        # Version ist bereit - Starte Minecraft
+        self._start_minecraft(selected_version)
+    
+    def _on_download_finished(self, success: bool, version):
+        """Wird aufgerufen wenn Download fertig ist"""
+        self.play_button.setEnabled(True)
+        
+        if success:
+            logger.info(f"✅ {version.name} heruntergeladen - Starte Minecraft...")
+            self._start_minecraft(version)
+        else:
+            QMessageBox.critical(self, "Fehler", "Download fehlgeschlagen. Prüfe die Logs.")
+    
+    def _start_minecraft(self, selected_version):
+        """Startet Minecraft"""
         # Spieler-Login
         user = self.auth_manager.login_offline("MEXO-Player")
         
