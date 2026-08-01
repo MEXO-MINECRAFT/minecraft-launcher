@@ -26,7 +26,7 @@ class GameProcess:
         java_path: str,
         ram_gb: int
     ) -> bool:
-        """Startet Minecraft"""
+        """Startet Minecraft - ECHTE Version"""
         try:
             # RAM in MB
             ram_mb = ram_gb * 1024
@@ -35,28 +35,37 @@ class GameProcess:
             minecraft_dir = Path.home() / ".minecraft"
             minecraft_dir.mkdir(exist_ok=True)
             
-            logger.info(f"🎮 Starte Minecraft {version.version}...")
-            logger.info(f"👤 Spieler: {user.username}")
-            logger.info(f"💾 RAM: {ram_gb}GB ({ram_mb}MB)")
-            logger.info(f"📂 Minecraft Dir: {minecraft_dir}")
-            logger.info(f"☕ Java: {java_path}")
+            logger.info(f"Minecraft wird gestartet: {version.version}")
+            logger.info(f"Spieler: {user.username}")
+            logger.info(f"RAM: {ram_gb}GB")
             
-            # Kommandozeile für Spielstart mit echten Minecraft-Argumenten
+            # WICHTIG: Prüfe ob JAR existiert
+            jar_file = minecraft_dir / "versions" / version.version / f"{version.version}.jar"
+            
+            if not jar_file.exists():
+                logger.error(f"FEHLER: JAR nicht gefunden: {jar_file}")
+                logger.error("Bitte warte bis der Download fertig ist!")
+                return False
+            
+            logger.info(f"JAR gefunden: {jar_file}")
+            
+            # Starte mit echtem Minecraft-Befehl
             cmd = [
                 java_path,
                 f"-Xmx{ram_mb}M",
                 f"-Xms{int(ram_mb * 0.5)}M",
-                "-XX:+UnlockExperimentalVMOptions",
-                "-XX:G1NewCollectionPercentage=20",
-                "-XX:G1ReservePercent=5",
-                "-XX:InitiatingHeapOccupancyPercent=15",
+                "-XX:+UseG1GC",
+                "-XX:+ParallelRefProcEnabled",
+                "-XX:G1NewCollectionPercentage=30",
+                "-XX:G1ReservePercent=20",
+                "-XX:InitiatingHeapOccupancyPercent=20",
+                "-XX:MaxGCPauseMillis=50",
                 "-XX:G1HeapRegionSize=16M",
                 "-Dfile.encoding=UTF-8",
                 "-Duser.country=DE",
                 "-Duser.language=de",
-                "-Djava.io.tmpdir=" + str(minecraft_dir / "temp"),
-                "-cp",
-                "minecraft.jar",
+                "-Djava.net.preferIPv4Stack=true",
+                "-cp", str(jar_file),
                 "net.minecraft.client.main.Main",
                 "--username", user.username,
                 "--version", version.version,
@@ -69,85 +78,57 @@ class GameProcess:
                 "--userType", "legacy"
             ]
             
-            logger.info("✅ Java-Prozess wird gestartet...")
-            logger.debug(f"Kommando: {' '.join(cmd)}")
+            logger.info("Starte Java-Prozess...")
             
-            # Starte Minecraft als echter Prozess
+            # Starte Minecraft
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
                 cwd=str(minecraft_dir)
             )
             
             self.is_running = True
             self.start_time = time.time()
             
-            logger.info(f"✅ Minecraft Prozess gestartet (PID: {self.process.pid})")
+            logger.info(f"Minecraft gestartet! (PID: {self.process.pid})")
             
-            # Starte Monitoring in separatem Thread
+            # Monitoring
             monitor_thread = Thread(target=self._monitor_process, daemon=True)
             monitor_thread.start()
             
             return True
         
         except FileNotFoundError:
-            logger.error(f"❌ Java nicht gefunden: {java_path}")
-            self.is_running = False
+            logger.error(f"FEHLER: Java nicht gefunden: {java_path}")
             return False
         except Exception as e:
-            logger.error(f"❌ Fehler beim Starten von Minecraft: {e}")
-            self.is_running = False
+            logger.error(f"FEHLER beim Starten: {str(e)}")
             return False
     
     def _monitor_process(self):
-        """Überwacht den Spielprozess"""
+        """Ueberwacht den Prozess"""
         if not self.process:
             return
         
         try:
-            # Warte auf Prozessende
             self.process.wait()
-            
-            logger.info("📋 Minecraft-Output wird gelesen...")
-            
+            logger.info("Minecraft wurde beendet")
         except Exception as e:
-            logger.error(f"❌ Fehler beim Monitoring: {e}")
+            logger.error(f"Monitoring Fehler: {e}")
         finally:
             self.is_running = False
-            
-            runtime = time.time() - self.start_time
-            hours = int(runtime // 3600)
-            minutes = int((runtime % 3600) // 60)
-            seconds = int(runtime % 60)
-            
-            logger.info(
-                f"🛑 Minecraft beendet. Spielzeit: {hours}h {minutes}m {seconds}s"
-            )
-            
-            if self.on_stop_callback:
-                self.on_stop_callback()
     
     def stop_game(self):
         """Beendet das Spiel"""
         if self.process and self.is_running:
             try:
-                logger.info("⏹️ Beende Minecraft...")
+                logger.info("Beende Minecraft...")
                 self.process.terminate()
-                
-                # Warte 5 Sekunden
-                try:
-                    self.process.wait(timeout=5)
-                    logger.info("✅ Minecraft ordnungsgemäß beendet")
-                except subprocess.TimeoutExpired:
-                    logger.warning("⚠️ Minecraft reagiert nicht, erzwinge Beendigung...")
-                    self.process.kill()
-                    self.process.wait()
-                    logger.info("✅ Minecraft erzwungen beendet")
-                    
+                self.process.wait(timeout=5)
+                logger.info("Minecraft beendet")
             except Exception as e:
-                logger.error(f"❌ Fehler beim Beenden: {e}")
+                logger.error(f"Fehler beim Beenden: {e}")
     
     def is_game_running(self) -> bool:
         """Prüft ob Spiel läuft"""
@@ -156,14 +137,14 @@ class GameProcess:
         return False
     
     def get_runtime(self) -> float:
-        """Gibt Spiellaufzeit in Sekunden zurück"""
+        """Gibt Spiellaufzeit zurück"""
         if self.is_running or self.process:
             return time.time() - self.start_time
         return 0.0
 
 
 class GameMonitor:
-    """Überwacht Performance während des Spiels"""
+    """Ueberwacht Performance"""
     
     def __init__(self):
         self.fps: int = 0
@@ -177,7 +158,7 @@ class GameMonitor:
         self.cpu_used = cpu
     
     def get_stats(self) -> dict:
-        """Gibt aktuelle Statistiken zurück"""
+        """Gibt Statistiken zurück"""
         return {
             'fps': self.fps,
             'ram_gb': self.ram_used,
