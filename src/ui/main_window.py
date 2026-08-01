@@ -33,7 +33,7 @@ class VersionDownloadWorker(QThread):
     def run(self):
         """Lädt Version in separatem Thread"""
         try:
-            self.progress.emit(f"📥 Lade {self.version.name} herunter...")
+            self.progress.emit(f"📥 Lade {self.version.name} von Mojang herunter...")
             
             success = self.version_manager.ensure_version_downloaded(self.version)
             
@@ -139,9 +139,9 @@ class MEXOClient(QMainWindow):
         self.nav_buttons = {}
         
         nav_data = [
-            ("🏠 Home", 0),
-            ("⚙️ Einstellungen", 1),
-            ("📋 Logs", 2),
+            ("Home", 0),
+            ("Einstellungen", 1),
+            ("Logs", 2),
         ]
         
         for button_text, page_index in nav_data:
@@ -178,22 +178,22 @@ class MEXOClient(QMainWindow):
         layout.addWidget(header)
         
         # Info
-        info = SubHeaderLabel("Wähle eine Minecraft-Version und starte das Spiel")
+        info = SubHeaderLabel("Waehle eine Minecraft-Version und starte das Spiel")
         layout.addWidget(info)
         
         layout.addSpacing(20)
         
         # Versionen Sektion
-        versions_group = QGroupBox("Verfügbare Versionen")
+        versions_group = QGroupBox("Verfuegbare Versionen")
         versions_layout = QVBoxLayout(versions_group)
         
         self.version_list = QListWidget()
         self.version_list.itemClicked.connect(self.on_version_selected)
         
         for version in self.version_manager.get_all_versions():
-            status = "✅" if version.downloaded else "📥"
+            status = "OK" if version.downloaded else "DL"
             item = QListWidgetItem(
-                f"{status} {version.name} ({version.type.value}) - Java {version.java_version}"
+                f"[{status}] {version.name} ({version.type.value}) - Java {version.java_version}"
             )
             item.setData(Qt.ItemDataRole.UserRole, version)
             self.version_list.addItem(item)
@@ -277,11 +277,11 @@ class MEXOClient(QMainWindow):
         
         theme_buttons_layout = QHBoxLayout()
         
-        dark_btn = CustomButton("🌙 Dunkler Modus")
+        dark_btn = CustomButton("Dunkler Modus")
         dark_btn.clicked.connect(lambda: self.apply_theme(ThemeMode.DARK))
         theme_buttons_layout.addWidget(dark_btn)
         
-        light_btn = CustomButton("☀️ Heller Modus")
+        light_btn = CustomButton("Heller Modus")
         light_btn.clicked.connect(lambda: self.apply_theme(ThemeMode.LIGHT))
         theme_buttons_layout.addWidget(light_btn)
         
@@ -330,7 +330,7 @@ class MEXOClient(QMainWindow):
         layout.addStretch()
         
         # Save Button
-        save_btn = CustomButton("💾 Einstellungen speichern")
+        save_btn = CustomButton("Einstellungen speichern")
         save_btn.clicked.connect(self.on_save_settings)
         layout.addWidget(save_btn)
         
@@ -354,17 +354,17 @@ class MEXOClient(QMainWindow):
         self.log_display = QTextEdit()
         self.log_display.setReadOnly(True)
         self.log_display.setFont(QFont("Courier", 10))
-        self.log_display.setText("Logs erscheinen hier, wenn das Spiel läuft...\n\n")
+        self.log_display.setText("Logs erscheinen hier, wenn das Spiel laeuft...\n\n")
         layout.addWidget(self.log_display)
         
         # Buttons
         button_layout = QHBoxLayout()
         
-        clear_btn = CustomButton("🗑️ Logs löschen")
+        clear_btn = CustomButton("Logs loeschen")
         clear_btn.clicked.connect(self.on_clear_logs)
         button_layout.addWidget(clear_btn)
         
-        export_btn = CustomButton("💾 Logs exportieren")
+        export_btn = CustomButton("Logs exportieren")
         export_btn.clicked.connect(self.on_export_logs)
         button_layout.addWidget(export_btn)
         
@@ -391,13 +391,13 @@ class MEXOClient(QMainWindow):
         self.current_theme = theme
         stylesheet = get_pink_theme_stylesheet(theme)
         self.setStyleSheet(stylesheet)
-        logger.info(f"🎨 Theme gewechselt: {theme.value}")
+        logger.info(f"Theme gewechselt: {theme.value}")
     
     def on_version_selected(self, item):
         """Wird aufgerufen, wenn eine Version ausgewählt wird"""
         version = item.data(Qt.ItemDataRole.UserRole)
         self.version_manager.set_selected_version(version)
-        logger.info(f"Version ausgewählt: {version.name}")
+        logger.info(f"Version ausgewaehlt: {version.name}")
     
     def on_ram_changed(self, value: int):
         """RAM-Auswahl geändert"""
@@ -409,7 +409,7 @@ class MEXOClient(QMainWindow):
         selected_version = self.version_manager.get_selected_version()
         
         if not selected_version:
-            QMessageBox.warning(self, "Fehler", "Bitte wähle eine Minecraft-Version aus.")
+            QMessageBox.warning(self, "Fehler", "Bitte waehle eine Minecraft-Version aus.")
             return
         
         if not self.selected_java_path:
@@ -418,8 +418,8 @@ class MEXOClient(QMainWindow):
         
         # Wenn Version nicht heruntergeladen: Download starten
         if not selected_version.downloaded:
-            logger.info(f"📥 Version {selected_version.name} nicht vorhanden - Download startet...")
-            self.log_display.append(f"📥 Lade {selected_version.name} herunter...\n")
+            logger.info(f"Version {selected_version.name} nicht vorhanden - Download startet...")
+            self.log_display.append(f"[DOWNLOAD] Lade {selected_version.name} von Mojang...\n")
             
             # Starte Download in separatem Thread
             self.download_worker = VersionDownloadWorker(self.version_manager, selected_version)
@@ -438,20 +438,20 @@ class MEXOClient(QMainWindow):
         self.play_button.setEnabled(True)
         
         if success:
-            logger.info(f"✅ {version.name} heruntergeladen - Starte Minecraft...")
+            logger.info(f"{version.name} heruntergeladen - Starte Minecraft...")
             self._start_minecraft(version)
         else:
-            QMessageBox.critical(self, "Fehler", "Download fehlgeschlagen. Prüfe die Logs.")
+            QMessageBox.critical(self, "Fehler", "Download fehlgeschlagen. Pruefe die Logs.")
     
     def _start_minecraft(self, selected_version):
         """Startet Minecraft"""
         # Spieler-Login
         user = self.auth_manager.login_offline("MEXO-Player")
         
-        logger.info(f"🎮 Minecraft wird gestartet...")
-        logger.info(f"👤 Spieler: {user.username}")
-        logger.info(f"📦 Version: {selected_version.version}")
-        logger.info(f"💾 RAM: {self.selected_ram}GB")
+        logger.info(f"Minecraft wird gestartet...")
+        logger.info(f"Spieler: {user.username}")
+        logger.info(f"Version: {selected_version.version}")
+        logger.info(f"RAM: {self.selected_ram}GB")
         
         # Starte echtes Minecraft
         success = self.game_process.start_game(
@@ -463,22 +463,22 @@ class MEXOClient(QMainWindow):
         
         if success:
             self.log_display.append(
-                f"✅ [START] Minecraft {selected_version.version} wird gestartet...\n"
-                f"👤 Spieler: {user.username}\n"
-                f"💾 RAM: {self.selected_ram}GB\n"
-                f"☕ Java: {self.selected_java_path}\n"
-                f"⏱️ Zeit: {__import__('datetime').datetime.now().strftime('%H:%M:%S')}\n"
+                f"[START] Minecraft {selected_version.version} wird gestartet...\n"
+                f"Spieler: {user.username}\n"
+                f"RAM: {self.selected_ram}GB\n"
+                f"Java: {self.selected_java_path}\n"
+                f"Zeit: {__import__('datetime').datetime.now().strftime('%H:%M:%S')}\n"
             )
             QMessageBox.information(
                 self,
-                "✅ Minecraft wird gestartet",
-                f"Starte {selected_version.name}\nSpieler: {user.username}\nRAM: {self.selected_ram}GB\n\nMinecraft öffnet sich in Kürze..."
+                "Minecraft wird gestartet",
+                f"Starte {selected_version.name}\nSpieler: {user.username}\nRAM: {self.selected_ram}GB\n\nMinecraft oeffnet sich in Kuerze..."
             )
         else:
             self.log_display.append(
-                f"❌ [FEHLER] Minecraft konnte nicht gestartet werden!\n"
+                f"[FEHLER] Minecraft konnte nicht gestartet werden!\n"
             )
-            QMessageBox.critical(self, "Fehler", "Minecraft konnte nicht gestartet werden. Prüfe die Logs.")
+            QMessageBox.critical(self, "Fehler", "Minecraft konnte nicht gestartet werden. Pruefe die Logs.")
     
     def on_save_settings(self):
         """Speichert die Einstellungen"""
@@ -488,12 +488,12 @@ class MEXOClient(QMainWindow):
         config.set("features.mod_manager", self.mod_checkbox.isChecked())
         
         QMessageBox.information(self, "Erfolgreich", "Einstellungen gespeichert!")
-        logger.info("✅ Einstellungen gespeichert")
+        logger.info("Einstellungen gespeichert")
     
     def on_clear_logs(self):
         """Löscht die Logs"""
         self.log_display.clear()
-        logger.info("🗑️ Logs gelöscht")
+        logger.info("Logs geloescht")
     
     def on_export_logs(self):
         """Exportiert die Logs"""
@@ -508,7 +508,7 @@ class MEXOClient(QMainWindow):
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(self.log_display.toPlainText())
             QMessageBox.information(self, "Erfolgreich", f"Logs exportiert zu:\n{file_path}")
-            logger.info(f"📁 Logs exportiert: {file_path}")
+            logger.info(f"Logs exportiert: {file_path}")
     
     def update_system_stats(self):
         """Aktualisiert die Systeminformationen"""
